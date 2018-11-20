@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+		<style>
+			html,
+			body,
+			#container {
+				width: 100%;
+				height: 100%;
+			}
+			
+			#btns {
+				display: inline-block;
+				float: left;
+				width: auto;
+			}
+			
+			#btns button {
+				display: block;
+				float: left;
+				width: 110px;
+				margin-left: 10px;
+			}
+		</style>
+		<title>多边形绘制</title>
+		<link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+		<!--搜索用-->
+		<link rel="stylesheet" href="https://cache.amap.com/lbs/static/main1119.css" />
+		<script src="https://webapi.amap.com/maps?v=1.4.10&key=b6835fd392b36c032a8cbbb2f52f3f52&plugin=AMap.MouseTool,AMap.PolyEditor,AMap.Autocomplete,AMap.PlaceSearch"></script>
+		<script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
+		<!--搜索用-->
+		<script type="text/javascript" src="https://cache.amap.com/lbs/static/addToolbar.js"></script>
+	</head>
+
+	<body>
+		<div id="container"></div>
+		<div id="myPageTop">
+			<table>
+				<tr>
+					<td>
+						<label>请输入关键字：</label>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<input id="tipinput" />
+					</td>
+				</tr>
+			</table>
+		</div>
+		<div id="btns" class="input-card">
+			<button class="btn" onclick="testPolyEditor()" style="margin-left: 0;">测试初始化数据</button>
+			<button class="btn" onclick="drawPolygon('out')">绘制派送地址</button>
+			<button class="btn" onclick="drawPolygon('in')">绘制收件地址</button>
+			<button class="btn" onclick="editPolygon('enable')">开启多边形编辑</button>
+			<button class="btn" onclick="editPolygon('disable')">关闭多边形编辑</button>
+			<button class="btn" onclick="getPolygon()">获取多边形顶点</button>
+			<button class="btn" onclick="clearPolygon()">清除所有覆盖物</button>
+		</div>
+		<script type="text/javascript">
+			//多边形对象
+			var polygon;
+			//地图对象
+			var map = new AMap.Map("container", {
+				resizeEnable: true,
+				zoom: 14
+			});
+			//派送经纬度集合
+			var outLngs = new Array();
+			//收件经纬度集合
+			var inLngs = new Array();
+
+			//派件多边形图层
+			var outPolyEditor;
+			//收件多边形图层
+			var inPolyEditor;
+
+			var mouseTool = new AMap.MouseTool(map);
+
+			//输入提示
+			var autoOptions = {
+				input: "tipinput"
+			};
+			var auto = new AMap.Autocomplete(autoOptions);
+			var placeSearch = new AMap.PlaceSearch({
+				map: map
+			}); //构造地点查询类
+			AMap.event.addListener(auto, "select", select); //注册监听，当选中某条记录时会触发
+			function select(e) {
+				placeSearch.setCity(e.poi.adcode);
+				placeSearch.search(e.poi.name); //关键字查询查询
+			}
+
+			function drawPolygon(e) {
+				if(existPolygon(e)) {
+					log.warn('当前图层已存在！');
+				} else {
+					var color = e == 'in' ? 'red' : 'green';
+					mouseTool.polygon({
+						extData: e,
+						cursor: 'ani',
+						strokeColor: color, //线条颜色
+						strokeOpacity: 0.8, //轮廓线透明度
+						strokeWeight: 3, //轮廓线宽度
+						bubble: true,
+						strokeStyle: "solid", //虚线或者视线，'dashed'、'solid'
+						fillColor: color, //多边形填充颜色，使用16进制颜色代码赋值，如：#FFAA00
+						fillOpacity: 0.6, //多边形填充透明度，取值范围[0,1]，0表示完全透明，1表示不透明。默认为0.9
+						draggable: true //设置多边形是否可拖拽移动，默认为false
+					})
+				}
+			}
+			mouseTool.on('draw', function(event) {
+				// event.obj 为绘制出来的覆盖物对象
+				//				log.info('覆盖物对象绘制完成');
+				var a = event.obj.getExtData();
+				if(a == 'out') {
+					outPolyEditor = new AMap.PolyEditor(map, existPolygon(a));
+				} else {
+					inPolyEditor = new AMap.PolyEditor(map, existPolygon(a));
+				}
+			})
+
+			//校验是否存在图层
+			function existPolygon(e) {
+				var overlaysList = map.getAllOverlays('polygon');
+				if(overlaysList.length > 0) {
+					for(var i = 0; i < overlaysList.length; i++) {
+						var polygon = overlaysList[i];
+						if(polygon.getExtData() == e) {
+							return polygon;
+						}
+					}
+				}
+			}
+
+			function getPolygon() {
+				outLngs = [];
+				inLngs = [];
+				var overlaysList = map.getAllOverlays('polygon');
+				if(overlaysList.length > 0) {
+					for(var i = 0; i < overlaysList.length; i++) {
+						var polygon = overlaysList[i];
+						polygon.getPath().map(function(j) {
+							var obj = {};
+							obj.lat = j.lat;
+							obj.lng = j.lng;
+							if(polygon.getExtData() == 'out') {
+								outLngs.push(obj);
+							} else {
+								inLngs.push(obj);
+							}
+						});
+					}
+					log.info('派件：' + JSON.stringify(outLngs) + '收件：' + JSON.stringify(inLngs));
+				}
+			}
+
+			function clearPolygon() {
+				map.clearMap();
+			}
+
+			function editPolygon(e) {
+				if(inPolyEditor == null && outPolyEditor == null) {
+					log.error('未选择图层！');
+				} else {
+					if(e == 'enable') {
+						if(existPolygon('in')) {
+							inPolyEditor.open();
+						}
+						if(existPolygon('out')) {
+							outPolyEditor.open();
+						}
+					} else {
+						if(existPolygon('in')) {
+							inPolyEditor.close();
+						}
+						if(existPolygon('out')) {
+							outPolyEditor.close();
+						}
+					}
+				}
+			}
+
+			function testPolyEditor() {
+				var path = [
+					[121.446294, 31.246347],
+					[121.450071, 31.224183],
+					[121.46552, 31.232844]
+				]
+
+				var polygon = new AMap.Polygon({
+					path: path,
+					isOutline: true,
+					borderWeight: 3,
+					strokeColor: "#FF33FF",
+					strokeWeight: 6,
+					strokeOpacity: 0.2,
+					fillOpacity: 0.4,
+					// 线样式还支持 'dashed'
+					fillColor: '#1791fc',
+					zIndex: 50,
+				})
+				polygon.setMap(map)
+				var polyEditor = new AMap.PolyEditor(map, polygon)
+				polyEditor.open();
+			}
+		</script>
+	</body>
+
+</html>
